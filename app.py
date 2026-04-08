@@ -27,11 +27,11 @@ def get_base_sku(sku):
 def process_excel(csv_file, template_file, csv_filename):
     df = pd.read_excel(csv_file)
 
-    # クライアント名はCSVファイル名のアンダースコア前の部分から取得
+    # クライアント名はCSVファイル名から取得
     # 例: "ぱるぷーら_2026-04.xlsx" → "ぱるぷーら"
-    # アンダースコアがない場合は空欄
+    # 例: "ぱるぷーら.xlsx" → "ぱるぷーら"
     stem = os.path.splitext(csv_filename)[0]
-    client_name = stem.split('_')[0] if '_' in stem else ''
+    client_name = stem.split('_')[0]
 
     df['Base SKU'] = df['Lineitem sku'].apply(get_base_sku)
     df[['Product Base Name', 'Color', 'Size']] = df['Lineitem name'].apply(lambda x: pd.Series(parse_variant(x)))
