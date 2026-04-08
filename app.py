@@ -64,6 +64,9 @@ def process_excel(csv_file, template_file, csv_filename):
             part2 = int(match.group(2))
             sku_display = f"{part1}-{part2:02d}"
 
+        # デザイン欄の画像をすべて削除
+        ws._images.clear()
+
         # テンプレートの固定値をクリア（空欄出力）
         ws.cell(row=1, column=7).value = None   # 発注日
         ws.cell(row=4, column=1).value = None   # 納期
