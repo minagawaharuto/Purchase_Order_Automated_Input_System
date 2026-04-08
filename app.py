@@ -24,50 +24,73 @@ def get_base_sku(sku):
         return f"{parts[0]}-{parts[1]}"
     return str(sku)
 
-def process_excel(csv_file, template_file):
+def process_excel(csv_file, template_file, csv_filename):
     df = pd.read_excel(csv_file)
+
+    # クライアント名はCSVファイル名のアンダースコア前の部分から取得
+    # 例: "ぱるぷーら_2026-04.xlsx" → "ぱるぷーら"
+    stem = os.path.splitext(csv_filename)[0]
+    client_name = stem.split('_')[0]
+
     df['Base SKU'] = df['Lineitem sku'].apply(get_base_sku)
     df[['Product Base Name', 'Color', 'Size']] = df['Lineitem name'].apply(lambda x: pd.Series(parse_variant(x)))
     df = df.dropna(subset=['Color', 'Size'])
-    
+
     products = df['Base SKU'].unique()
     output_files = []
 
     for sku in products:
         if not sku: continue
-        
-        prod_df = df[df['Base SKU'] == sku]
+
+        prod_df = df[df['Base SKU'] == sku].copy()
         prod_name = prod_df['Product Base Name'].iloc[0]
-        
+
         size_order = {'S': 0, 'M': 1, 'L': 2, 'XL': 3, '2XL': 4, 'XXL': 4, '3XL': 5, 'XXXL': 5}
         prod_df['Size_Order'] = prod_df['Size'].map(size_order)
         prod_df = prod_df.dropna(subset=['Size_Order'])
-        
+
         agg = prod_df.groupby(['Color', 'Size'])['Lineitem quantity'].sum().unstack(fill_value=0)
-        
+
         # Load Template from BytesIO
         template_file.seek(0)
         wb = openpyxl.load_workbook(template_file)
-        ws = wb.active # Assuming the first sheet
-        
-        # SKU formatting
+        ws = wb.active
+
+        # SKU formatting（ファイル名用）
         sku_display = sku
         match = re.match(r'(G\d+)-(\d+)', str(sku))
         if match:
             part1 = match.group(1)
             part2 = int(match.group(2))
             sku_display = f"{part1}-{part2:02d}"
-        
-        ws.cell(row=1, column=3).value = sku_display
-        ws.cell(row=7, column=3).value = 'ぱるぷーら'
-        ws.cell(row=7, column=5).value = 'フロント'
-        ws.cell(row=7, column=7).value = 'Tシャツ'
-        
+
+        # テンプレートの固定値をクリア（空欄出力）
+        ws.cell(row=1, column=7).value = None   # 発注日
+        ws.cell(row=4, column=1).value = None   # 納期
+        ws.cell(row=7, column=1).value = None   # 担当
+        ws.cell(row=7, column=5).value = None   # デザイン名
+        ws.cell(row=7, column=7).value = None   # アイテム名
+        ws.cell(row=10, column=1).value = None  # プリント方法
+        ws.cell(row=10, column=3).value = None  # ボディ品番
+        ws.cell(row=10, column=4).value = None  # 通常発注
+
+        # クライアント名はCSVファイル名から設定
+        ws.cell(row=7, column=3).value = client_name
+
         colors = list(agg.index)
+
+        # テンプレートに事前入力されたボディカラー・数量をすべてクリア
+        for i in range(8):
+            col_num = 3 + i
+            ws.cell(row=12, column=col_num).value = None
+            for row_num in range(13, 19):
+                ws.cell(row=row_num, column=col_num).value = None
+            ws.cell(row=19, column=col_num).value = None
+
         for c_idx, color in enumerate(colors):
             col_num = 3 + c_idx
             ws.cell(row=12, column=col_num).value = color
-            
+
             sizes_map = {'S': 13, 'M': 14, 'L': 15, 'XL': 16, '2XL': 17, 'XXL': 17, '3XL': 18, 'XXXL': 18}
             for size_name, qty in agg.loc[color].items():
                 if size_name in sizes_map:
@@ -75,7 +98,7 @@ def process_excel(csv_file, template_file):
 
             col_sum = agg.iloc[c_idx].sum()
             ws.cell(row=19, column=col_num).value = col_sum
-            
+
         grand_total = agg.values.sum()
         ws.cell(row=20, column=3).value = grand_total
         
@@ -109,7 +132,7 @@ if csv_file and os.path.exists(TEMPLATE_FILE_PATH):
                 with open(TEMPLATE_FILE_PATH, "rb") as f:
                     template_content = io.BytesIO(f.read())
                 
-                results = process_excel(csv_file, template_content)
+                results = process_excel(csv_file, template_content, csv_file.name)
                 
                 # Create ZIP
                 zip_buf = io.BytesIO()
