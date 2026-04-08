@@ -29,8 +29,9 @@ def process_excel(csv_file, template_file, csv_filename):
 
     # クライアント名はCSVファイル名のアンダースコア前の部分から取得
     # 例: "ぱるぷーら_2026-04.xlsx" → "ぱるぷーら"
+    # アンダースコアがない場合は空欄
     stem = os.path.splitext(csv_filename)[0]
-    client_name = stem.split('_')[0]
+    client_name = stem.split('_')[0] if '_' in stem else ''
 
     df['Base SKU'] = df['Lineitem sku'].apply(get_base_sku)
     df[['Product Base Name', 'Color', 'Size']] = df['Lineitem name'].apply(lambda x: pd.Series(parse_variant(x)))
